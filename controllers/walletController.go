@@ -106,7 +106,7 @@ func (walletController *WalletController) WithdrawToken() gin.HandlerFunc {
 			return
 		}
         
-		apiresponsedto := dto.TransfertokenApiResponseDTO
+		apiresponsedto := dto.TransfertokenApiResponseDTO{}
 		serviceErr := walletController.Service.WithdrawTokenService(ctx,withdrawdto,apiresponsedto )
 		if serviceErr != nil {
 			c.Error(serviceErr) // handled by middleware
@@ -121,20 +121,41 @@ func (walletController *WalletController) WithdrawToken() gin.HandlerFunc {
 	}
 }
 
-// func (walletController *WalletController) WithdrawToken() gin.HandlerFunc {
-// 	return func(c *gin.Context) {
 
-// 	}
-// }
-
-func (walletController *WalletController) TransferToken() gin.HandlerFunc {
-	return func(c *gin.Context) {
-
-	}
-}
 
 func (walletController *WalletController) TransactionHistory() gin.HandlerFunc {
 	return func(c *gin.Context) {
+         var ctx, cancel = context.WithTimeout(context.Background(), 200*time.Second)
+		defer cancel()
+      withdrawdto := dto.TransactionHistoryDTO{}
+		err := c.BindJSON(&withdrawdto)
+		if err != nil {
+			c.Error(utils.NewAppError(err.Error(), http.StatusBadRequest))
+			return
+		}
+
+		ValidationError := walletController.Validator.Struct(withdrawdto)
+
+		if ValidationError != nil {
+			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,utils.FormatValidationErrors(ValidationError)))
+			return
+		}
+        
+		
+		transactions,total, serviceErr := walletController.Service.TransactionHistoryServices(ctx,withdrawdto)
+		if serviceErr != nil {
+			c.Error(serviceErr) // handled by middleware
+			return
+		}
+
+       c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Transaction history gotten successfully",
+			"data": gin.H{
+				"transactions":transactions,
+				"total":total ,
+			},
+		})
 
 	}
 }

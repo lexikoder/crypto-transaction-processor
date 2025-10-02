@@ -3,18 +3,22 @@ package routes
 import (
 	"crypto-transaction-processor/controllers"
 	"crypto-transaction-processor/middleware"
+	// "time"
+
 	"github.com/gin-gonic/gin"
 )
 
 
 
 func AuthRoutes(app *gin.Engine,authcontroller *controllers.AuthController){
+
+
 	public := app.Group("/api")
 	{
 	public.POST("/auth/signup",authcontroller.SignUp())
 	public.POST("/auth/login",authcontroller.Login())
 	public.POST("/auth/reqotp",authcontroller.ReqOtp())
-	public.POST("/auth/verifyotp",authcontroller.VerifyOtp())
+	public.POST("/auth/verifyotp",middleware.RateLimitMiddleware(0.0083, 5),authcontroller.VerifyOtp())
 	public.POST("/auth/refreshtoken",authcontroller.RefreshAccessToken())
 	}
 

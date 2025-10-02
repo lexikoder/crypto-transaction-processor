@@ -9,14 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"github.com/shopspring/decimal"
 	"log"
 	"net/http"
 	"os"
-	// "time"
-
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -27,6 +23,7 @@ type WalletService struct {
 
 func (walletService *WalletService) CreateWalletService(ctx context.Context, dto dto.CreateWalletDTO, apiresponsedto dto.CreateWalletApiResponseDTO) error {
 	WALLETAPIKEY := os.Getenv("WALLETAPIKEY")
+	WALLETINFRASTRUCTUREURL := os.Getenv("WALLETINFRASTRUCTUREURL")
 	var wallet models.WalletNetwork
 
 	err := walletService.Db.DB.WithContext(ctx).Where("user_id = ? AND network_type = ? ", dto.UserID, dto.NetworkType).First(&wallet).Error
@@ -39,7 +36,7 @@ func (walletService *WalletService) CreateWalletService(ctx context.Context, dto
 		"networktype": dto.NetworkType,
 	}
 
-	body, err := utils.ApiPostRequest("https://wallet-infracstructure-backend-dkvj.onrender.com/api/wallet/createwallet", data, WALLETAPIKEY)
+	body, err := utils.ApiPostRequest(WALLETINFRASTRUCTUREURL, data, WALLETAPIKEY)
 	if err != nil {
 		fmt.Println("Captured error1:", err)
 		return utils.NewAppError("something went wrong", http.StatusInternalServerError)
@@ -131,11 +128,15 @@ func (walletService *WalletService) DepositTokenService(ctx context.Context, dto
 			}
 			var balance string = "0"
 			var available_balance string = "0"
+			decimalval, err := utils.SafeInt32ToUint(decimal)
+			if err != nil {
+				return utils.NewAppError("math error", http.StatusBadRequest)
+			}
 			wallet = models.Wallet{
 				ID:               uuid.New(),
 				AvailableBalance: &available_balance,
 				Balance:          &balance,
-				Decimal:          &decimal,
+				Decimal:          &decimalval,
 				Asset:            (*models.Assets)(&dto.Asset),
 				WalletNetworkId:  &walletNetwork.ID,
 			}
@@ -207,10 +208,17 @@ func (walletService *WalletService) DepositTokenService(ctx context.Context, dto
 	return nil
 
 }
-
-func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dto dto.WithdrawTokenDTO,apiresponsedto dto.TransfertokenApiResponseDTO) error {
-    MNENOMIC := os.Getenv("MNENOMIC")
-	WALLETADDRESS :=os.Getenv("WALLETADDRESS")
+// how the withdrawal works
+// first deduct the balance 
+// update transaction status to pending
+// do onchain transfer 
+// if onchain transfer fails add balance back and update transaction status to failed 
+//  if onchain transfer pass then update transaction status to  confirmed 
+func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dto dto.WithdrawTokenDTO, apiresponsedto dto.TransfertokenApiResponseDTO) error {
+	MNENOMIC := os.Getenv("MNENOMIC")
+	WALLETADDRESS := os.Getenv("WALLETADDRESS")
+	WALLETAPIKEY := os.Getenv("WALLETAPIKEY")
+	WALLETINFRASTRUCTUREURL := os.Getenv("WALLETINFRASTRUCTUREURL")
 	// userid asset  network depositamount decimal
 	var walletNetwork models.WalletNetwork
 	var wallet models.Wallet
@@ -239,7 +247,18 @@ func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dt
 		fmt.Println(models.TransactionType(dto.TransactionType), models.TransactionDeposit)
 		return errors.New("invalid transaction type")
 	}
+
 	tt := models.TransactionType(dto.TransactionType)
+           
+	       tokenamount, ok:=utils.WeiToTokenAmount(dto.WithdrawAmount,models.Network(dto.Network),models.Assets(dto.Asset))
+		   if !ok {
+		return utils.NewAppError("asset not supported on this network", http.StatusBadRequest)
+	}
+
+	assetaddress := utils.NetworkAssetAddress(models.Network(dto.Network), models.Assets(dto.Asset))
+	if assetaddress == "" {
+		return utils.NewAppError("asset not supported on this network", http.StatusBadRequest)
+	}
 
 	err := walletService.Db.DB.WithContext(ctx).Where("user_id = ? AND network_type = ? ", dto.UserId, checknetworktype).First(&walletNetwork).Error
 	log.Println("error:", err)
@@ -275,11 +294,8 @@ func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dt
 		return err
 	}
 
-	// fromaddress := "rrrrrrrr"
-	// Txhash := "rrrrrrrr"
+   
 	transactionerr := walletService.Db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// network := models.Network(dto.Network)
-		fmt.Println(network, "tt")
 		status := models.StatusPending
 		amountStr := dto.WithdrawAmount
 		TransactionOnchain = models.TransactionOnchain{
@@ -303,37 +319,43 @@ func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dt
 
 	if transactionerr != nil {
 		fmt.Println("check3:", transactionerr)
-		return utils.NewAppError("could not deposit", http.StatusInternalServerError)
-	}
-    
-    data := map[string]string{
- "mnemonic":MNENOMIC,
-  "token":dto.Asset,
-  "fromaddress":WALLETADDRESS,
-  "toaddress":dto.Toaddress,
-  "amount":dto.WithdrawAmount,
-  "networktype":string(checknetworktype),
-  "_network":dto.Network,
+		return utils.NewAppError("could not withdraw", http.StatusInternalServerError)
 	}
 
-	body, err := utils.ApiPostRequest("https://wallet-infracstructure-backend-dkvj.onrender.com/api/wallet/createwallet", data, "")
-	// if err != nil {
-	// 	fmt.Println("Captured error1:", err)
-	// 	return utils.NewAppError("something went wrong", http.StatusInternalServerError)
-	// }
-	// txHash, err := blockchain.SendTransaction(wallet, amount, toAddress)
+	data := map[string]string{
+		"mnemonic":    MNENOMIC,
+		"token":       assetaddress,
+		"fromaddress": WALLETADDRESS,
+		"toaddress":   dto.Toaddress,
+		"amount":      tokenamount,
+		"networktype": string(checknetworktype),
+		"_network":    dto.Network,
+	}
+    fmt.Println("data:",data)
+	body, err := utils.ApiPostRequest(WALLETINFRASTRUCTUREURL, data, WALLETAPIKEY)
+
 	if err != nil {
-		//     // try to mark withdrawal as failed
+		
+		return utils.NewAppError("Could not withdraw", http.StatusBadRequest)
+
+	}
+
+	responsedto := apiresponsedto
+	if err := json.Unmarshal(body, &responsedto); err != nil {
+		
+		return utils.NewAppError("something went wrong", http.StatusInternalServerError)
+	}
+	fmt.Println("value:", responsedto)
+	if !responsedto.Success {
 		status := models.StatusFailed
-		// stat := ""
+		
 		updateErr := walletService.Db.DB.WithContext(ctx).Model(&models.TransactionOnchain{}).
 			Where("id = ?", TransactionOnchain.ID).
 			Updates(models.TransactionOnchain{
 				Status: &status,
-				//  TxHash: &stat,
+				
 			}).Error
 
-			
 		if updateErr != nil {
 			// log this separately, don’t lose it
 			log.Printf("failed to mark withdrawal %s as failed: %v", TransactionOnchain.ID, updateErr)
@@ -351,20 +373,7 @@ func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dt
 			log.Printf("failed to mark withdrawal %s as failed: %v", TransactionOnchain.ID, updateErr)
 
 		}
-
-		return utils.NewAppError("you have no wallet or balace to complete this transaction", http.StatusBadRequest)
-
-	}
-
-    
-	responsedto := apiresponsedto
-	if err := json.Unmarshal(body, &responsedto); err != nil {
-		fmt.Println("Captured error2:", err)
-		return utils.NewAppError("something went wrong", http.StatusInternalServerError)
-	}
-	fmt.Println("value:", responsedto)
-	if !responsedto.Success {
-		return utils.NewAppError("could not create wallet", http.StatusInternalServerError)
+		return utils.NewAppError("Could not withdraw", http.StatusInternalServerError)
 	}
 
 	// this should run as a background worker to complete the status to confirmed when 3 blocks has been confirmed
@@ -372,8 +381,8 @@ func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dt
 	updateErr := walletService.Db.DB.WithContext(ctx).Model(&models.TransactionOnchain{}).
 		Where("id = ?", TransactionOnchain.ID).
 		Updates(models.TransactionOnchain{
-				Status: &status,
-			    TxHash: &responsedto.Data.Txhash}).Error
+			Status: &status,
+			TxHash: &responsedto.Data.Txhash}).Error
 
 	if updateErr != nil {
 		log.Printf("failed to mark withdrawal %s as failed: %v", TransactionOnchain.ID, updateErr)
@@ -383,9 +392,22 @@ func (walletService *WalletService) WithdrawTokenService(ctx context.Context, dt
 
 }
 
+func (walletService *WalletService) TransactionHistoryServices(ctx context.Context, dto dto.TransactionHistoryDTO) ([]models.TransactionOnchain,int64,error) {
+	// page, pageSize int dto 
 
-func (authController *WalletService) TransactionHistoryService() gin.HandlerFunc {
-	return func(c *gin.Context) {
+    var transactions []models.TransactionOnchain
+    var total int64
 
-	}
+    // Count total records
+    if err := walletService.Db.DB.WithContext(ctx).Model(&models.TransactionOnchain{}).Count(&total).Error; err != nil {
+        return nil, 0, err
+    }
+
+    // Apply pagination
+    offset := (dto.Page - 1) * dto.PageSize
+    if err := walletService.Db.DB.WithContext(ctx).Limit(dto.PageSize).Offset(offset).Find(&transactions).Error; err != nil {
+        return nil, 0, err
+    }
+
+    return transactions, total, nil
 }

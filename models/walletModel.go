@@ -23,7 +23,7 @@ type WalletNetwork struct {
 type Wallet struct {
     ID              uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	// Network         *Network       `gorm:"uniqueIndex:network_asset_walletid;not null;check:network IN ('ETHEREUM','BASE','BSC','POLYGON','SOLANA','APTOS')" json:"network"`
-	AvailableBalance  *string      `gorm:"type:numeric;not null;" json:"available_balance"`
+	AvailableBalance  *string      `gorm:"type:numeric;not null;default:'0';" json:"available_balance"`
     Balance         *string        `gorm:"type:numeric;not null;" json:"balance"`
 	Decimal         *uint          `gorm:"not null;" json:"decimal"`
 	Asset           *Assets        `gorm:"uniqueIndex:network_asset_walletid;not null;check:asset IN ('ETH','APT','POL','BNB','SOL','USDC','USDT')" json:"asset"` // also add surpoorted assets 
