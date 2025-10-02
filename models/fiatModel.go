@@ -11,7 +11,7 @@ type FiatWallet struct {
     UserID          *uuid.UUID         `gorm:"type:uuid;uniqueIndex:userid_currency;not null" json:"user_id"`
 	User            User          `gorm:"foreignKey:UserID;" json:"-"`
     Currency        *Currency     `gorm:"uniqueIndex:userid_currency;not null;check:currency IN ('NGN','USD')" json:"currency"`
-    Balance         *int64       `gorm:"not null" json:"balance"`
+    Balance         *string       `gorm:"type:numeric;not null" json:"balance"`
     CreatedAt       time.Time     `gorm:"autoCreateTime" json:"created_at"`
     UpdatedAt       time.Time     `gorm:"autoUpdateTime" json:"updated_at"`
 }
@@ -25,7 +25,7 @@ type FiatTransaction struct {
     TransactionType  *FiatTransactionType    `gorm:"not null;check:transaction_type IN ('WITHDRAWAL','DEPOSIT')" json:"transaction_type"`
     BankName          *string                 `gorm:"not null;" json:"bank_name" `
     AccountNo         *string                 `gorm:"not null;" json:"account_no" `
-    Amount            *int64          `gorm:"not null;" json:"amount" `
+    Amount            *string          `gorm:"type:numeric;not null;" json:"amount" `
 	FiatCurrency          *Currency       `gorm:"not null;check:fiat_currency IN ('NGN','USD')" json:"fiat_currency"`
     // Status          string    // pending, confirmed, failed
     CreatedAt         time.Time     `gorm:"autoCreateTime" json:"created_at"`
@@ -40,7 +40,7 @@ type FiatInternalTransaction struct {
 	FromUser             User          `gorm:"foreignKey:FromUserID" json:"-"`
 	ToUserID             *uuid.UUID         `gorm:"type:uuid;not null" json:"to_user_id"`   
     ToUser               User          `gorm:"foreignKey:ToUserID" json:"-"`
-    Amount          *int64            `gorm:"not null;" json:"amount" `
+    Amount          *string            `gorm:"type:numeric;not null;" json:"amount" `
 	FiatCurrency        *Currency       `gorm:"not null;check:fiat_currency IN ('NGN','USD')" json:"fiat_currency"`
     CreatedAt       time.Time     `gorm:"autoCreateTime" json:"created_at"`
     UpdatedAt       time.Time     `gorm:"autoUpdateTime" json:"updated_at"`

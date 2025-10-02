@@ -7,10 +7,13 @@ import (
 	"crypto-transaction-processor/models"
 	"crypto-transaction-processor/utils"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -174,11 +177,94 @@ func (authService *AuthService) LoginService(ctx context.Context,userdto dto.Log
     }
  
   err = authService.Db.DB.WithContext(ctx).Create(&refreshTokendata).Error
-
+        fmt.Println("Captured error:", err) 
 		if err != nil {
 			return "","", utils.NewAppError("something went wrong", http.StatusInternalServerError)
 		}
-
-
+  
+  
   return accessToken , refreshToken, nil
 }
+
+
+
+
+	
+func (authService *AuthService) RefreshAccessTokenService(ctx context.Context,refreshToken string)(string,error){
+	    JWT_SECRET_KEY := os.Getenv("JWT_SECRET_KEY")
+        var user models.User
+		var refresh_token models.RefreshToken
+		
+
+		err := authService.Db.DB.WithContext(ctx).Where("token = ?", refreshToken).First(&refresh_token).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", utils.NewAppError("Invalid refresh token",http.StatusBadRequest)
+		}
+        
+
+		if time.Now().Unix() > *refresh_token.ExpiresAt {
+        err := authService.Db.DB.WithContext(ctx).Delete(&refresh_token, refresh_token.ID).Error
+		   if err != nil {
+        // Log internally (not exposed to the user)
+        log.Printf("failed to delete expired refresh token: %v", err)
+        // Still return a clean UX message
+        return "", utils.NewAppError("Invalid refresh token", http.StatusBadRequest)
+        }
+         return "", utils.NewAppError("Invalid refresh token", http.StatusBadRequest)
+	    } 
+
+
+		token, err := jwt.ParseWithClaims(refreshToken,&jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
+			if _,ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return []byte(JWT_SECRET_KEY), nil
+		})
+
+
+		if err != nil || !token.Valid {
+			return "", utils.NewAppError("Invalid token",http.StatusBadRequest)
+		}
+
+		claims,ok := token.Claims.(*jwt.MapClaims)
+		if !ok {
+			return "", utils.NewAppError("Invalid token",http.StatusBadRequest)
+		} 
+		userinfoMap := (*claims)["userinfo"].(map[string]any)
+        Id := userinfoMap["ID"]
+		 
+	    finderr := authService.Db.DB.WithContext(ctx).Where("id = ?", Id).First(&user).Error
+		if errors.Is(finderr, gorm.ErrRecordNotFound) {
+        return "",   utils.NewAppError("User not found", http.StatusNotFound)
+       }  
+
+	    userInfo := UserInfo{
+         ID:       user.ID,
+         Email: *user.Email,
+         Role:  user.Role,
+        }
+
+		 accessToken,JwtSignerr := utils.JwtSignMinutes(userInfo,AccessTokenExpiryTime)   // expires in 10 minutes
+  if JwtSignerr != nil {
+		return "", utils.NewAppError("something went wrong", 500)
+  }  
+
+  return accessToken , nil
+
+	}
+
+	func (authService *AuthService) LogoutService(ctx context.Context,refreshToken string)(error){
+	  
+		var refresh_token models.RefreshToken
+		err := authService.Db.DB.WithContext(ctx).Where("token = ?", refreshToken).First(&refresh_token).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.NewAppError("Invalid refresh token",http.StatusBadRequest)
+		}
+        DeleteErr := authService.Db.DB.WithContext(ctx).Delete(&refresh_token, refresh_token.ID).Error
+		   if DeleteErr != nil {
+        // Log internally (not exposed to the user)
+        log.Printf("failed to delete expired refresh token: %v", err)
+        return utils.NewAppError("Failed to logout", http.StatusBadRequest)
+		}
+        return  nil
+	}

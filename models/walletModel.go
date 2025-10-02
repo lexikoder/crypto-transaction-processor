@@ -9,6 +9,7 @@ import (
 type WalletNetwork struct {
     ID               uuid.UUID   `gorm:"type:uuid;primaryKey" json:"id"`
     NetworkType      *string     `gorm:"not null;uniqueIndex:networktype_userid;check:network_type IN ('EVM','SOLANA','APTOS')" json:"network_type"`
+    ExternalWalletId *string     `gorm:"unique;not null" json:"external_wallet_id"`
     WalletAddress    *string     `gorm:"unique;not null" json:"wallet_address"`
     EncPrivKey       *string     `gorm:"unique;not null" json:"enc_priv_key"`           // AES-encrypted private key (never raw)
 	UserID           *uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:networktype_userid" json:"user_id"`
@@ -22,7 +23,8 @@ type WalletNetwork struct {
 type Wallet struct {
     ID              uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	// Network         *Network       `gorm:"uniqueIndex:network_asset_walletid;not null;check:network IN ('ETHEREUM','BASE','BSC','POLYGON','SOLANA','APTOS')" json:"network"`
-	Balance         *int64         `gorm:"not null;" json:"balance"`
+	AvailableBalance  *string      `gorm:"type:numeric;not null;" json:"available_balance"`
+    Balance         *string        `gorm:"type:numeric;not null;" json:"balance"`
 	Decimal         *uint          `gorm:"not null;" json:"decimal"`
 	Asset           *Assets        `gorm:"uniqueIndex:network_asset_walletid;not null;check:asset IN ('ETH','APT','POL','BNB','SOL','USDC','USDT')" json:"asset"` // also add surpoorted assets 
 	WalletNetworkId *uuid.UUID     `gorm:"type:uuid;uniqueIndex:network_asset_walletid;not null;" json:"wallet_network_id"`
@@ -38,11 +40,11 @@ type TransactionOnchain struct {
     UserID           *uuid.UUID       `gorm:"type:uuid;not null;" json:"user_id"`
 	User             User             `gorm:"foreignKey:UserID;" json:"-"`
     // WalletID       uint           // Which wallet (Solana / EVM / Sui / Aptos)
-    Network          *Network         `gorm:"not null;check:network IN ('ETHEREUM','BASE','BSC','POLYGON','SOLANA','APTOS')" json:"network"`
-    TxHash           *string          `gorm:"not null;unique" json:"tx_hash"`
+    Network          *Network         `gorm:"not null;check:network IN ('SEPOLIA','BASESEPOLIA','ETHEREUM','BASE','BSC','POLYGON','SOLANA','APTOS')" json:"network"`
+    TxHash           *string          `gorm:"unique" json:"tx_hash"`
     FromAddress      *string          `gorm:"not null;" json:"from_address"`
     ToAddress        *string          `gorm:"not null;" json:"to_address"`
-    Amount           *float64         `gorm:"not null;" json:"amount"` 
+    Amount           *string          `gorm:"type:numeric;not null;" json:"amount"` 
     Asset            *Assets          `gorm:"not null;check:asset IN ('ETH','APT','POL','BNB','SOL','USDC','USDT')" json:"asset"` // also add surpoorted assets    // "ETH", "SOL", "APT", "USDC"
     TransactionType  *TransactionType `gorm:"not null;check:transaction_type IN ('DEPOSIT','WITHDRAWAL')" json:"transaction_type"`// "deposit", "withdrawal", "transfer", "swap"
     Status           *StatusType      `gorm:"not null;check:status IN ('PENDING','CONFIRMED','FAILED')" json:"status"`// "pending", "confirmed", "failed"
@@ -61,7 +63,7 @@ type CryptoInternalTransaction struct {
     FromWalletaddress    *string       `gorm:"not null" json:"from_wallet_address"`  
     ToWalletaddress      *string       `gorm:"not null" json:"to_wallet_address"`  
     Asset                *Assets       `gorm:"not null;check:asset IN ('ETH','APT','POL','BNB','SOL','USDC','USDT')" json:"asset"` 
-    Amount               *int64     `gorm:"not null;check:amount > 0" json:"amount"`
+    Amount               *string     `gorm:"type:numeric;not null;check:amount > 0" json:"amount"`
     // Type            string          `gorm:"not null;check:type IN ('TRANSFER')"`
     CreatedAt            time.Time     `gorm:"autoCreateTime" json:"created_at"`
     UpdatedAt            time.Time     `gorm:"autoUpdateTime" json:"updated_at"`

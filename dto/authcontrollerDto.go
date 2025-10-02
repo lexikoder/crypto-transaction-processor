@@ -1,5 +1,5 @@
 package dto
-import "github.com/go-playground/validator/v10"
+// import "github.com/go-playground/validator/v10"
 
 type BaseEmailDTO struct {
     Email    string `json:"email" validate:"required,email"`       // required + valid email
@@ -30,12 +30,3 @@ type RefreshTokenDTO struct {
     RefreshToken    string `json:"refresh_token" validate:"required"`       // required + valid email
 }
 
-func FormatValidationErrors(err error) map[string]string {
-    res := make(map[string]string)
-    if errs, ok := err.(validator.ValidationErrors); ok {
-        for _, e := range errs {
-            res[e.Field()] = e.Error() // default error or custom formatting
-        }
-    }
-    return res
-}

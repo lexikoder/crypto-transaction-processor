@@ -19,17 +19,20 @@ const (
 	NetworkEvmType NetworkType = "EVM" 
 	NetworkSolanaType NetworkType = "SOLANA"
 	NetworkAptosType NetworkType = "APTOS"   
+	NetworkUnknownType NetworkType = "UNKNOWN"
 )
 
 
 type Network string 
 const ( 
+	NetworkSEPOLIA Network =    "SEPOLIA"
+	NetworkBASESEPOLIA Network= "BASESEPOLIA"
 	NetworkEth Network =        "ETHEREUM" 
 	NetworkBase Network =       "BASE"
 	NetworkBsc Network =        "BSC"
 	NetworkPolygon Network =    "POLYGON"
-	NetworkSolana NetworkType = "SOLANA"
-	NetworkMove NetworkType =   "APTOS"   
+	NetworkSolana Network = "SOLANA"
+	NetworkAPTOS Network =   "APTOS"   
 )
 
 type Assets string 
@@ -44,7 +47,7 @@ const (
 )
 
 
-// Transaction table
+// Transaction table for crypto 
 type TransactionType string 
 const (
 	TransactionDeposit TransactionType =     "DEPOSIT"

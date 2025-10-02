@@ -13,6 +13,7 @@ func MigrateBooks(db *gorm.DB) error {
 		&FiatWallet{},
 		&FiatTransaction{},
 		&FiatInternalTransaction{},
+		&RefreshToken{},
 	)
 	return err
 }

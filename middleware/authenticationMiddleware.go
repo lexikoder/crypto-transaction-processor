@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto-transaction-processor/utils"
 	"log"
 	"net/http"
 	"os"
@@ -23,7 +24,8 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenString, err := c.Cookie("access_token")
 		log.Println("Password hashing error:", err)
         if err != nil {
-           c.JSON(http.StatusUnauthorized, gin.H{"error": "Access token missing"})
+			c.Error(utils.NewAppError("Access token missing", http.StatusBadRequest))
+        //    c.JSON(http.StatusUnauthorized, gin.H{"error": "Access token missing"})
            c.Abort()
            return
         }
@@ -43,14 +45,16 @@ func AuthMiddleware() gin.HandlerFunc {
 
 
 		if err != nil || !token.Valid {
-			c.JSON(401, gin.H{"error": "Invalid token"})
+			c.Error(utils.NewAppError("Invalid token", http.StatusBadRequest))
+			// c.JSON(401, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
 
 		claims,ok := token.Claims.(*jwt.MapClaims)
 		if !ok {
-			c.JSON(401, gin.H{"error": "Invalid token"})
+			c.Error(utils.NewAppError("Invalid token", http.StatusBadRequest))
+			// c.JSON(401, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}

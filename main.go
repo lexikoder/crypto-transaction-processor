@@ -41,6 +41,8 @@ func main(){
 	repo := &database.Repository{DB:db}
 	AuthService := &service.AuthService{Db:repo}
     authController := &controllers.AuthController{Service:AuthService,Validator:validate}
+	WalletService := &service.WalletService{Db:repo}
+    walletController := &controllers.WalletController{Service:WalletService,Validator:validate}
     // walletController := WalletController{Repo:repo}
     
     gin.SetMode(os.Getenv("GIN_MODE"))
@@ -49,11 +51,12 @@ func main(){
 	router.Use(gin.Recovery())
 	router.Use(middleware.ErrorHandler())
 	routes.AuthRoutes(router ,authController)
+	routes.WalletRoutes(router , walletController)
 
 	// router.Use(middleware.Authentication())
 	// routes.AuthRoutes(router)
 
-	
+	             
     log.Println("server started")
 	log.Fatal(router.Run(":" + port ))
 

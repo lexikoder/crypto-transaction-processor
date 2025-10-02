@@ -35,7 +35,7 @@ func (authController *AuthController) ReqOtp() gin.HandlerFunc {
 		ValidationError := authController.Validator.Struct(reqotpdto)
 
 		if ValidationError != nil {
-			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,dto.FormatValidationErrors(ValidationError)))
+			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,utils.FormatValidationErrors(ValidationError)))
 			return
 		}
 
@@ -65,7 +65,7 @@ func (authController *AuthController) VerifyOtp() gin.HandlerFunc {
 		ValidationError := authController.Validator.Struct(verifyotpdto)
 
 		if ValidationError != nil {
-			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,dto.FormatValidationErrors(ValidationError)))
+			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,utils.FormatValidationErrors(ValidationError)))
 			return
 		}
 
@@ -97,7 +97,7 @@ func (authController *AuthController) SignUp() gin.HandlerFunc {
 		ValidationError := authController.Validator.Struct(userdto)
 
 		if ValidationError != nil {
-			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,dto.FormatValidationErrors(ValidationError)))
+			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,utils.FormatValidationErrors(ValidationError)))
 			return
 		}
 
@@ -132,7 +132,7 @@ func (authController *AuthController) Login() gin.HandlerFunc {
 		ValidationError := authController.Validator.Struct(userdto)
 
 		if ValidationError != nil {
-			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,dto.FormatValidationErrors(ValidationError)))
+			c.Error(utils.ValidationAppError("validation error", http.StatusBadRequest,utils.FormatValidationErrors(ValidationError)))
 			return
 		}
 
@@ -182,13 +182,97 @@ func (authController *AuthController) Login() gin.HandlerFunc {
 
 func (authController *AuthController) RefreshAccessToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		domain := os.Getenv("DOMAIN")
+		env := os.Getenv("ENV")
+		secure := true
+		var ctx, cancel = context.WithTimeout(context.Background(), 200*time.Second)
+		defer cancel()
+       refreshToken, err := c.Cookie("refresh_token")
+
+		 if err != nil {
+			c.Error(utils.NewAppError("Refresh token missing", http.StatusBadRequest)) 
+           return
+        }
+      
+		accessToken, serviceErr := authController.Service.RefreshAccessTokenService(ctx,refreshToken)
+        if serviceErr != nil {
+			c.Error(serviceErr) // handled by middleware
+			return
+		}
 		
-	}
+		if env == "production"{
+           secure = false
+		}
+
+			// Secure cookie for access token
+		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetCookie(
+			"access_token",
+			accessToken,
+			service.AccessTokenExpiryTime * 60,              // 10 min
+			"/",
+			domain,    // production domain
+			secure,             // secure = HTTPS only
+			true,             // httpOnly
+		)
+        c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Accesstoken generated",
+		})
+		
+}
 }
 
 func (authController *AuthController) Logout() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		
+		domain := os.Getenv("DOMAIN")
+		env := os.Getenv("ENV")
+		secure := true
+		var ctx, cancel = context.WithTimeout(context.Background(), 200*time.Second)
+		defer cancel()
+       refreshToken, err := c.Cookie("refresh_token")
+
+		 if err != nil {
+			c.Error(utils.NewAppError("Refresh token missing", http.StatusBadRequest)) 
+           return
+        }
+      
+		 serviceErr := authController.Service.LogoutService(ctx,refreshToken)
+        if serviceErr != nil {
+			c.Error(serviceErr) // handled by middleware
+			return
+		}
+
+		if env == "production"{
+           secure = false
+		}
+
+		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetCookie(
+			"access_token",
+			"",
+			-1,              // 10 min
+			"/",
+			domain,    // production domain
+			secure,             // secure = HTTPS only
+			true,             // httpOnly
+		)
+        
+		// Secure cookie for refresh token
+		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetCookie(
+			"refresh_token",
+			"",
+			-1,       // 7 days
+			"/",       // refresh-only endpoint
+			domain,
+			secure,
+			true,    // this is httponly
+		)
+		 c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Logged out successfully",
+		})
 	}
 }
 
